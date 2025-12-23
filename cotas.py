@@ -61,6 +61,7 @@ def init_db():
         )
     ''')
     
+    # Garante que CAIXA exista sempre que iniciar
     c.execute("INSERT OR IGNORE INTO ativos (Ticker, Qtd, Preco_Medio, Preco_Atual, Stop_Loss, Tipo) VALUES ('CAIXA', 0, 1, 1, 0, 'Caixa')")
     
     # 3. Histórico de Cota
@@ -171,7 +172,6 @@ class SplashWithLog(ctk.CTk):
         self.overrideredirect(True)
         self.running = True
         
-        # Centralizar
         w, h = 500, 600
         try:
             sw = self.winfo_screenwidth()
@@ -222,9 +222,10 @@ class SplashWithLog(ctk.CTk):
         if self.gif_frames:
             self.lbl_gif.configure(image=self.gif_frames[self.current_frame])
             self.current_frame = (self.current_frame + 1) % len(self.gif_frames)
-            self.after(500, self.animate)
+            self.after(100, self.animate)
 
     def iniciar(self):
+        if not self.running: return
         try:
             self.log("Conectando Banco de Dados...")
             init_db()
@@ -284,18 +285,23 @@ class FrameSumario(ctk.CTkFrame):
     def atualizar(self):
         pl = get_patrimonio_liquido()
         cota = calcular_valor_cota()
+        
+        # --- CORREÇÃO DO ERRO ---
+        # Busca segura do CAIXA (Se não existir, retorna 0 em vez de crashar)
         conn = sqlite3.connect(DB_FILE)
-        caixa = conn.execute("SELECT Qtd FROM ativos WHERE Ticker='CAIXA'").fetchone()
+        res = conn.execute("SELECT Qtd FROM ativos WHERE Ticker='CAIXA'").fetchone()
         conn.close()
+        
+        caixa_val = res[0] if res else 0.0
+        # ------------------------
         
         self.card_pl.configure(text=f"R$ {pl:,.2f}")
         self.card_cota.configure(text=f"R$ {cota:.6f}")
-        self.card_caixa.configure(text=f"R$ {caixa[0]:,.2f}" if caixa else "R$ 0.00")
+        self.card_caixa.configure(text=f"R$ {caixa_val:,.2f}")
 
         # Tabela
         for i in self.tree.get_children(): self.tree.delete(i)
         
-        # Algoritmo de Preço Médio
         conn = sqlite3.connect(DB_FILE)
         df = pd.read_sql_query("SELECT * FROM cotistas_mov ORDER BY Data ASC, ID ASC", conn)
         conn.close()
@@ -355,7 +361,6 @@ class FrameCotistas(ctk.CTkFrame):
         self.form = ctk.CTkFrame(self)
         self.form.pack(pady=10)
         
-        # Linha 1
         self.entry_data = ctk.CTkEntry(self.form, placeholder_text="Data (YYYY-MM-DD)")
         self.entry_data.insert(0, datetime.today().strftime('%Y-%m-%d'))
         self.entry_data.grid(row=0, column=0, padx=5, pady=5)
@@ -363,7 +368,6 @@ class FrameCotistas(ctk.CTkFrame):
         self.entry_nome = ctk.CTkEntry(self.form, placeholder_text="Nome Cotista")
         self.entry_nome.grid(row=0, column=1, padx=5, pady=5)
         
-        # Linha 2
         self.cb_tipo = ctk.CTkComboBox(self.form, values=["Aporte (+)", "Saque (-)"])
         self.cb_tipo.grid(row=1, column=0, padx=5, pady=5)
         
@@ -376,7 +380,6 @@ class FrameCotistas(ctk.CTkFrame):
         
         ctk.CTkButton(self.form, text="Processar", command=self.pre_check).grid(row=1, column=3, padx=10)
 
-        # Histórico
         self.tree = ttk.Treeview(self, columns=("Data", "Nome", "Tipo", "Valor", "Cotas"), show="headings", height=10)
         for c in ("Data", "Nome", "Tipo", "Valor", "Cotas"): 
             self.tree.heading(c, text=c)
@@ -387,7 +390,6 @@ class FrameCotistas(ctk.CTkFrame):
         try:
             if not self.entry_nome.get(): return messagebox.showwarning("Erro", "Nome obrigatório")
             float(self.entry_valor.get().replace(",", "."))
-            # Abre verificação de preços
             JanelaAtualizacaoAtivos(self, self.efetivar)
         except ValueError:
             messagebox.showerror("Erro", "Valor inválido")
@@ -408,13 +410,14 @@ class FrameCotistas(ctk.CTkFrame):
             qtd_cotas = qtd * fator
             
             conn = sqlite3.connect(DB_FILE)
-            # 1. Registra Movimentação
             conn.execute("INSERT INTO cotistas_mov (Data, Cotista, Tipo, Valor, Cota_Ref, Qtd_Cotas, Ticker_Ref) VALUES (?,?,?,?,?,?,?)",
                          (data, nome, tipo, valor, cota, qtd_cotas, ticker))
             
-            # 2. Atualiza Saldo do Ativo (Caixa ou outro)
-            # Simplificação: Tudo impacta o saldo financeiro do ativo (Qtd)
+            # --- CORREÇÃO ---
+            # Garante que o ativo CAIXA existe antes de atualizar
+            conn.execute("INSERT OR IGNORE INTO ativos (Ticker, Qtd, Preco_Medio, Preco_Atual, Stop_Loss, Tipo) VALUES ('CAIXA', 0, 1, 1, 0, 'Caixa')")
             conn.execute(f"UPDATE ativos SET Qtd = Qtd + ? WHERE Ticker = 'CAIXA'", (valor * fator,))
+            # ----------------
             
             conn.commit()
             conn.close()
@@ -474,7 +477,12 @@ class FrameTrading(ctk.CTkFrame):
             
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
-            caixa = cursor.execute("SELECT Qtd FROM ativos WHERE Ticker='CAIXA'").fetchone()[0]
+            
+            # --- CORREÇÃO ---
+            # Busca segura de Caixa
+            res = cursor.execute("SELECT Qtd FROM ativos WHERE Ticker='CAIXA'").fetchone()
+            caixa = res[0] if res else 0.0
+            # ----------------
             
             if op == "COMPRA":
                 if caixa < total: return messagebox.showerror("Erro", "Sem Caixa")
@@ -492,7 +500,10 @@ class FrameTrading(ctk.CTkFrame):
                 existe = cursor.execute("SELECT Qtd FROM ativos WHERE Ticker=?", (ticker,)).fetchone()
                 if not existe or existe[0] < qtd: return messagebox.showerror("Erro", "Sem Ativos")
                 
+                # Garante que caixa exista
+                cursor.execute("INSERT OR IGNORE INTO ativos (Ticker, Qtd, Preco_Medio, Preco_Atual, Stop_Loss, Tipo) VALUES ('CAIXA', 0, 1, 1, 0, 'Caixa')")
                 cursor.execute("UPDATE ativos SET Qtd = Qtd + ? WHERE Ticker='CAIXA'", (total,))
+                
                 nova_qtd = existe[0] - qtd
                 if nova_qtd == 0: cursor.execute("DELETE FROM ativos WHERE Ticker=?", (ticker,))
                 else: cursor.execute("UPDATE ativos SET Qtd=? WHERE Ticker=?", (nova_qtd, ticker))
@@ -507,9 +518,11 @@ class FrameTrading(ctk.CTkFrame):
 
     def atualizar(self):
         conn = sqlite3.connect(DB_FILE)
-        caixa = conn.execute("SELECT Qtd FROM ativos WHERE Ticker='CAIXA'").fetchone()[0]
+        # Busca Segura
+        res = conn.execute("SELECT Qtd FROM ativos WHERE Ticker='CAIXA'").fetchone()
         conn.close()
-        self.lbl_caixa.configure(text=f"Caixa Disponível: R$ {caixa:,.2f}")
+        caixa_val = res[0] if res else 0.0
+        self.lbl_caixa.configure(text=f"Caixa Disponível: R$ {caixa_val:,.2f}")
 
 # ==============================================================================
 # 📝 ABA 4: EDITOR DE REGISTROS (NOVA)
@@ -531,12 +544,10 @@ class FrameEditor(ctk.CTkFrame):
         ctk.CTkButton(self.frame_sel, text="🗑️ Excluir Selecionado", command=self.excluir, fg_color="red").pack(side="right", padx=10)
         ctk.CTkButton(self.frame_sel, text="✏️ Salvar Edição", command=self.salvar_edicao).pack(side="right", padx=10)
 
-        # Treeview
         self.tree = ttk.Treeview(self, show="headings", height=15)
         self.tree.pack(fill="both", expand=True, padx=10, pady=5)
         self.tree.bind("<<TreeviewSelect>>", self.ao_selecionar)
         
-        # Area de Edição
         self.frame_edit = ctk.CTkScrollableFrame(self, height=100, orientation="horizontal")
         self.frame_edit.pack(fill="x", padx=10, pady=10)
         self.entradas = {}
@@ -545,7 +556,6 @@ class FrameEditor(ctk.CTkFrame):
 
     def carregar_dados(self, _=None):
         tabela = self.cb_tabela.get()
-        # Limpar
         for i in self.tree.get_children(): self.tree.delete(i)
         for w in self.frame_edit.winfo_children(): w.destroy()
         self.entradas = {}
@@ -562,7 +572,6 @@ class FrameEditor(ctk.CTkFrame):
             self.tree.heading(c, text=c)
             self.tree.column(c, width=100, anchor="center")
             
-            # Criar campos de edição
             f = ctk.CTkFrame(self.frame_edit)
             f.pack(side="left", padx=5)
             ctk.CTkLabel(f, text=c).pack()
@@ -594,7 +603,7 @@ class FrameEditor(ctk.CTkFrame):
             set_clause.append(f"{col} = ?")
             params.append(ent.get())
         
-        params.append(id_val) # Para o WHERE
+        params.append(id_val) 
         
         query = f"UPDATE {tabela} SET {', '.join(set_clause)} WHERE {pk} = ?"
         
@@ -613,7 +622,7 @@ class FrameEditor(ctk.CTkFrame):
         if not sel: return
         tabela = self.cb_tabela.get()
         pk = "ID" if tabela == "cotistas_mov" else "Ticker"
-        id_val = self.tree.item(sel[0])['values'][0] # Assume PK na col 0
+        id_val = self.tree.item(sel[0])['values'][0]
         
         if messagebox.askyesno("Confirmar", "Apagar registro?"):
             conn = sqlite3.connect(DB_FILE)
