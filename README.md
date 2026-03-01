@@ -4,6 +4,7 @@ Um sistema desktop avançado desenvolvido em Python para a gestão de carteiras 
 
 > ⚠️ **AVISO IMPORTANTE / IMPORTANT WARNING** <br>
 > Este software encontra-se em **Fase de Testes (Beta)**. Pode conter falhas, erros de cálculo ou comportamentos inesperados. Não o utilize para tomar decisões financeiras críticas ou auditorias oficiais sem verificar os dados matemáticos manualmente. O uso é de sua inteira responsabilidade.
+> A versão 3.4.0, não é compativél com as versão anteriores, devido a mudança nas tabelas e na estrutura de salvamento de históricos de cotas dos ativos.
 
 ---
 
