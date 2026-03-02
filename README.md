@@ -71,6 +71,16 @@ O sistema é dividido em módulos operacionais para garantir a segregação de d
 * **Botão "Recalcular Saldos":** Varre todo o histórico de *trades* e movimentações (do dia zero até hoje) e reconstrói a posição financeira atual, Preço Médio e Caixa para corrigir falhas humanas.
 * Suporte nativo à alternância entre múltiplas carteiras (arquivos `.db`).
 
+
+
+###Tela cotista
+<img width="1225" height="798" alt="image" src="https://github.com/user-attachments/assets/a904bfb6-ec8e-454d-bf7a-a0b9bf9706c9" />
+
+
+###Tela Enquadramento
+<img width="1194" height="772" alt="image" src="https://github.com/user-attachments/assets/f15ec2ee-730a-4d9c-b81e-64c208c9ae0d" />
+
+
 ---
 
 ## 🚀 Instalação e Requisitos
@@ -94,10 +104,5 @@ pip install customtkinter pandas sqlite3 numpy numpy-financial scipy python-bcb 
 python main.py
 
 
-###Tela cotista
-<img width="1225" height="798" alt="image" src="https://github.com/user-attachments/assets/a904bfb6-ec8e-454d-bf7a-a0b9bf9706c9" />
 
-
-###Tela Enquadramento
-<img width="1194" height="772" alt="image" src="https://github.com/user-attachments/assets/f15ec2ee-730a-4d9c-b81e-64c208c9ae0d" />
 
